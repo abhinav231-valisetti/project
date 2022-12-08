@@ -18,13 +18,22 @@
 __global__
 void GPUmatmul(int N, double *x, double *y, double *ans)
 {
-  for(int i = 0; i < N; i++) {
-    for(int j = 0; j < N; j++) {
-      for(int k = 0; k < N; k++) {
-        ans[i*N+j] += (x[i*N+k] * y[k*N+j]);
-      }
+int x_index= blockIdx.x * blockDim.x + threadIdx.x;
+int y_index= blockIdx.y * blockDim.y + threadIdx.y;
+int x_stride= blockDim.x * gridDim.x;
+int y_stride= blockDim.y * gridDim.y;
+
+
+for (int i= x_index; i <N; i+=x_stride)
+{
+ for (int j= y_index;j<N;j+=y_stride)
+    {  
+      for (int k=0;k<N;k++)
+        {
+            ans[i*N+j]+=(x[i*N+k]*y[k*N+j]);
+        }
     }
-  }
+}
 }
 
 // ---------------------------------------------------------------------- check
@@ -50,7 +59,7 @@ int main(void)
   // Martices
   double *x, *y, *ans;
 
-  // Allocated Unified Memory - accessible from both CPU and GPU
+  // Allocate Unified Memory - accessible from both CPU and GPU
   cudaMallocManaged(&x,sizeof(double)*N*N);
   cudaMallocManaged(&y,sizeof(double)*N*N);
   cudaMallocManaged(&ans,sizeof(double)*N*N);
@@ -71,7 +80,11 @@ int main(void)
   // Run kernel on GPU
   for(int i = 0; i <= iter; i++) {
     t = clock();
-    GPUmatmul<<<1,1>>>(N, x, y,ans);
+
+    int block_size = 256;
+    int no_of_blocks = (N + block_size - 1)/block_size;
+    GPUmatmul<<<no_of_blocks,block_size>>>(N, x, y,ans);
+
     cudaDeviceSynchronize();
     t = clock() - t;
     if(i) avg += t; //we will ignore the first run
